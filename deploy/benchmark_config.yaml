@@ -1,0 +1,21 @@
+profile:
+  kind: poisson
+  rate: 8.0
+
+# Define your data
+data:
+  kind: custom
+  path: ./rag_workload.jsonl
+
+output:
+  kind: json
+  path: ./vllm-rag-fp16-metrics.json
+
+# Establish your SLO constraints (Goodput boundaries)
+# constraints:
+#   - kind: over_saturation
+#     ttft_p99: 0.300   # 99% of requests must get their first token under 300ms
+#     tpot_p99: 0.050   # 99% of tokens must stream at 50ms per token or faster
+#     minimum_duration: 15 # Let each rate run for at least 15s before assessing
+#   - kind: max_duration
+#     seconds: 45       # Cap each test step at 45 seconds maximum
