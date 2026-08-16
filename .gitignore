@@ -216,3 +216,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Credentials / keys
+# NOTE: .env is already ignored by the Python template above (line ~151).
+# .env.example is intentionally NOT ignored - it is the placeholder template.
+vastssh_key
+vastssh_key.pub
+*.pem
+id_rsa
+id_rsa.pub
+.env
+!.env.example
+
+# macOS
+.DS_Store
+
+# NIM/OCI blobs pulled by deploy/nim/get_profiles.sh (~700MB, re-derivable)
+deploy/nim/llama-nim/
+deploy/nim/manifest_out/
+
+docs/
+notebooks/
