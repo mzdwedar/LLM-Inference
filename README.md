@@ -3,6 +3,17 @@
 Benchmark of three vLLM configurations serving `meta-llama/Meta-Llama-3.1-8B-Instruct` against a
 long-context RAG workload on a single **NVIDIA L4 (24GB, Ada)** Vast.ai instance.
 
+**TL;DR** — chunked prefill + automatic prefix caching, then FP8 weight quantization:
+
+| | Baseline (bf16) | Optimized (FP8 + APC) | Change |
+|---|---:|---:|---:|
+| Output throughput | 145 tok/s | **839 tok/s** | **5.8×** |
+| p95 time to first token | 89.4 s | **0.78 s** | **114× lower** |
+| Requests served concurrently | 23 | **128** | **5.6×** |
+| Preemptions | 125 | **0** | |
+
+![Headline results: TTFT, throughput and achieved RPS across the three configurations](results/figures/headline.png)
+
 The headline: at an offered load of 8 requests/sec the **baseline sustained only 1.27 RPS**, saturated
 with ~100 requests permanently queued. Chunked prefill + prefix caching, then FP8 weight quantization,
 brought it to **7.25 RPS with zero queueing and zero preemptions** — median TTFT from 83.5s to 544ms.
@@ -119,6 +130,8 @@ Server-side counters scraped from `/metrics` during the same runs:
 | Requests running (mean / max) | 21.4 / 23 | 68.5 / 128 | **110.6 / 128** |
 | Preemptions (total) | 125 | 698 | **0** |
 
+![Requests running vs waiting over time for each configuration](results/figures/queueing.png)
+
 The second table is where the mechanism shows up. The baseline never had more than **23 requests
 resident** while ~100 waited; the FP8 run held the full 128-request cap with its KV cache still
 half empty and never preempted once.
@@ -152,6 +165,8 @@ and preempting.
 ## Concurrency scaling
 
 Fixed-concurrency sweep against the FP8 server, 30s per step:
+
+![TTFT p95 and output throughput vs concurrent streams](results/figures/concurrency_sweep.png)
 
 | Streams | RPS | TTFT p50 | TTFT p95 | ITL p50 | Output tok/s | Errors |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -207,8 +222,10 @@ For a 1s TTFT p95 SLA, **128 concurrent streams** is the operating point.
 ```bash
 python scripts/generate_prompts.py              # regenerate data/rag_workload.jsonl
 python scripts/scrape_metrics.py <config>       # server-side /metrics, through the SSH tunnel
-jupyter lab notebooks/analysis.ipynb            # parse the raw reports (local only, see below)
+uv run --with matplotlib python scripts/plot_results.py   # redraw results/figures/ from results/exp2/
 ```
+
+Per-configuration `vllm serve` and guidellm commands are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 Raw reports are in `results/exp2/` (`vllm-rag-*.json` = guidellm client metrics,
 `vllm_metrics_*.json` = server-side scrapes). `results/exp1/` is an earlier run kept for reference;
@@ -222,15 +239,14 @@ Credentials (HF token, NGC key, GPU host and port) come from a gitignored `.env`
 | Path | In version control | Contents |
 |---|---|---|
 | `README.md` | yes | this report |
-| `scripts/` | yes | workload generation, metrics scraping, FP8 quantization |
-| `results/` | yes | raw guidellm reports and server-side scrapes (`exp1`, `exp2`) |
+| `scripts/` | yes | workload generation, metrics scraping, FP8 quantization, chart rendering |
+| `results/` | yes | raw guidellm reports and server-side scrapes (`exp1`, `exp2`), rendered charts (`figures/`) |
 | `data/` | yes | generated RAG workload |
 | `deploy/` | yes | Triton + TensorRT-LLM image, NGC/NIM profile tooling |
 | `baseline/` | yes | naive FastAPI + HF `pipeline` strawman server |
-| `docs/` | **not yet** | `RUNBOOK.md` (per-configuration server and guidellm commands), `ROADMAP.md`, `PLAN.md` |
+| `docs/RUNBOOK.md` | yes | per-configuration server and guidellm commands |
 | `notebooks/` | **not yet** | `analysis.ipynb` — executed, with output tables and plots |
 | `.env` | never | local secrets; `.env.example` is the tracked template |
 
-`docs/` and `notebooks/` are held back from version control for now, so the runbook and the analysis
-notebook exist only in a local working copy. Every figure in this report is nonetheless reproducible
-from the tracked `results/` JSON — the notebook is a convenience layer over it, not the source.
+The analysis notebook is held back from version control for now. Every figure and number in this
+report is reproducible from the tracked `results/` JSON; `scripts/plot_results.py` redraws the charts.
